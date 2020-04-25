@@ -24,11 +24,7 @@ walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z
 		height = 3
 	end
 	for j=start_z, end_z do
-		-- wood as floor material for the bridge
-		-- TODO: do this in the normal placement of the normal path nodes
-		for k=start_x, start_x + path_wide - 1 do
-			minetest.set_node({x=k,y=height,z=j}, material.bridge_floor)
-		end
+		-- note: the bridge floor is set when the path as such is placed
 		-- trees at the side that hold the fences
 		if(material.bridge_side_a) then
 			minetest.set_node({x=start_x-1,        y=height, z=j}, material.bridge_side_a)
@@ -179,6 +175,11 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 --		end
 --	end
 
+	-- those two tables will be true for is_bridge[z] or is_tunnel[z] if
+	--   there is a bridge or tunnel at position z (needed for placing
+	--   diffrent materials there later on)
+	local is_bridge = {}
+	local is_tunnel = {}
 	local z = start_z+1
 	while( z <= start_z + chunksize ) do
 		local d = used_height[z] - used_height[z-1]
@@ -196,6 +197,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 					-- TODO: the min height ought to depend on water level
 					for k=z, i do
 						used_height[k] = math.max(3, used_height[i])
+						is_bridge[k] = true
 					end
 					-- make sure the bridge can be reached (the entrance may be
 					-- quite steep right now)
@@ -233,6 +235,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 					-- lower the path to the floor of the tunnel
 					for k=z, i do
 						used_height[k] = used_height[i]
+						is_tunnel[k] = true
 					end
 					z = i
 					i = start_z + chunksize + 1
@@ -282,7 +285,13 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 		end
 
 		-- create the path at the calculated height
-		set_road_nodes(start_x, path_wide, used_height[z], z, material.normal)
+		if(     is_bridge[z] ) then
+			set_road_nodes(start_x, path_wide, used_height[z], z, material.bridge_floor)
+		elseif( is_tunnel[z] ) then
+			set_road_nodes(start_x, path_wide, used_height[z], z, material.tunnel_floor)
+		else
+			set_road_nodes(start_x, path_wide, used_height[z], z, material.normal)
+		end
 		-- clear the area above the path so that there is room for walking
 		for h=used_height[z]+1, used_height[z]+3 do
 			set_road_nodes(start_x, path_wide, h, z, {name="air"})
@@ -360,6 +369,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			bridge_fence_b = {name="default:fence_wood"},
 			bridge_pillar  = {name="default:tree"},
 			bridge_pillar_cross = {name="default:tree", param2=12},
+			tunnel_floor   = {name="default:cobble"},
 			tunnel_lamp    = {name="default:meselamp"},
 			}, 2, 5, 35, 25)
 		dx = dx + 8
