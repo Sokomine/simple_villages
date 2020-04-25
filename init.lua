@@ -5,7 +5,8 @@ walkable_road = {}
 -- TODO: recognize too high cliffs
 -- TODO: handle strange mapgen heightmap inconsistencies at borders
 -- TODO: handle the last/first road node in each mapchunk
--- TODO: do not build paths below water level
+-- paths are not built below min_path_height; bridges (2 nodes above that
+--        level) are used in such a case
 -- the material for all nodes (normal path, slabs, stairs, bridge, tunnel)
 --        is contained in the table "material"
 -- trees: the entire trunk standing on the path is removed, but
@@ -17,11 +18,10 @@ walkable_road = {}
 
 -- builds a nice wooden bridge
 -- Note: this covers only bridges extending in z direction
-walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z, heightmap, minp, chunksize, material )
+walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z, heightmap, minp, chunksize, material, min_height )
 	-- no bridges in or below water level
-	-- TODO: get better water level value
-	if(height < 3) then
-		height = 3
+	if(height < min_height) then
+		height = min_height
 	end
 	for j=start_z, end_z do
 		-- note: the bridge floor is set when the path as such is placed
@@ -79,7 +79,7 @@ end
 
 
 -- build a path extending in z direction
-walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length)
+walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length, min_path_height)
 	local get_hsum = function(start_x, z, heightmap, minp, chunksize, path_wide)
 		local hsum = 0
 		for x=start_x, start_x+path_wide-1 do
@@ -183,20 +183,29 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 	local z = start_z+1
 	while( z <= start_z + chunksize ) do
 		local d = used_height[z] - used_height[z-1]
+		-- we may need a bridge here
+		if(used_height[z-1] < min_path_height) then
+			used_height[z] = min_path_height
+			-- force a bridge
+			d = -2
+		end
 		-- if there is a hole we might want to build a bridge above it
-		if(d<-1) then -- or used_height[z]<0) then
+		if(d<-1) then
 			local i = z
 			while( i<start_z + chunksize) do
 				i = i+1
 				-- let the bridge span as many nodes as possible
 				if(used_height[i] >= used_height[z-1] and (i-z <= max_bridge_length)) then
-					walkable_road.build_bridge(start_x, path_wide, used_height[i], z, i, heightmap, minp, chunksize, material )
+					walkable_road.build_bridge(start_x, path_wide, used_height[i], z, i,
+						heightmap, minp, chunksize, material,
+						-- looks better if there is a bit of room between water level
+						-- and bridge floor
+						min_path_height + 2 )
 
 					-- raise the path up to bridge level
-					-- (the bridge has at least a height of 3)
-					-- TODO: the min height ought to depend on water level
+					-- (the bridge has at least a height of min_path_height + 2)
 					for k=z, i do
-						used_height[k] = math.max(3, used_height[i])
+						used_height[k] = math.max(min_path_height + 2, used_height[i])
 						is_bridge[k] = true
 					end
 					-- make sure the bridge can be reached (the entrance may be
@@ -206,10 +215,11 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 					local direction = 0
 					while(k>minp.z and used_height[k-1]) do
 						if(     used_height[k-1] < used_height[k] - 1) then
-							used_height[k-1] = used_height[k] - 1
+							-- make sure not to drop below water level with this
+							used_height[k-1] = math.max(min_path_height, used_height[k] - 1)
 							direction = -1
 						elseif( used_height[k-1] > used_height[k] + 1) then
-							used_height[k-1] = used_height[k] + 1
+							used_height[k-1] = math.max(min_path_height, used_height[k] + 1)
 							direction = 1
 						end
 						k = k-1
@@ -234,7 +244,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 					walkable_road.build_tunnel(start_x, path_wide, used_height[i], z, i, heightmap, minp, chunksize, material )
 					-- lower the path to the floor of the tunnel
 					for k=z, i do
-						used_height[k] = used_height[i]
+						used_height[k] = math.max(min_path_height, used_height[i])
 						is_tunnel[k] = true
 					end
 					z = i
@@ -371,7 +381,9 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			bridge_pillar_cross = {name="default:tree", param2=12},
 			tunnel_floor   = {name="default:cobble"},
 			tunnel_lamp    = {name="default:meselamp"},
-			}, 2, 5, 35, 25)
+			}, 2, 5, 135, 25,
+			-- min path height (ought to be at water level)
+			1)
 		dx = dx + 8
 	end
 --	walkable_road.draw_line( minp.x+math.floor(chunksize/2), minp.z, heightmap, minp, chunksize, "default:meselamp", 2, 5)
