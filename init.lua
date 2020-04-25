@@ -1,13 +1,14 @@
 
 walkable_road = {}
 
--- TODO: clear room above path from trees
 -- TODO: adjust entrance to bridges and tunnels (remember where they are)
 -- TODO: recognize too high cliffs
 -- TODO: handle strange mapgen heightmap inconsistencies at borders
 -- TODO: handle the last/first road node in each mapchunk
 -- TODO: do not build paths below water level
 -- TODO: make material for stairs, slabs and bridges configurable
+-- trees: the entire trunk standing on the path is removed, but
+--        sidewise branches remain standing
 -- stairs and slabs are used where needed (mostly slabs if possible);
 --        additional air is added above said stairs and slabs so that
 --        the player can climb the stiars
@@ -249,10 +250,28 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 
 	-- actually place the road nodes
 	for z=start_z, start_z + chunksize do
+
+		-- if there is a tree trunk at ground level, clean up the entire tree
+		-- (check the entire width of the path)
+		for x=start_x, start_x+path_wide-1 do
+			local height = heightmap[ ((z-minp.z)*chunksize) + (x-minp.x) ]
+			if(height) then
+				height = height + 1
+				-- trees usually start at ground height
+				local node = minetest.get_node({x=x, y=height, z=z})
+				-- check upwards until we find a node that is not a tree
+				while(node and node.name ~= "air" and node.name ~= "ignore"
+				   and minetest.get_item_group(node.name, "tree")>0) do
+					minetest.set_node({x=x, y=height, z=z}, {name="air"}) 
+					height = height + 1
+					node = minetest.get_node({x=start_x, y=height, z=z})
+				end
+			end
+		end
+
 		-- create the path at the calculated height
 		set_road_nodes(start_x, path_wide, used_height[z], z, {name=material})
 		-- clear the area above the path so that there is room for walking
-		-- TODO: if there is a tree trunk, clean up the entire tree
 		for h=used_height[z]+1, used_height[z]+3 do
 			set_road_nodes(start_x, path_wide, h, z, {name="air"})
 		end
