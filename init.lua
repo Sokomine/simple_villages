@@ -1,7 +1,6 @@
 
 walkable_road = {}
 
--- TODO: adjust entrance to bridges and tunnels (remember where they are)
 -- TODO: recognize too high cliffs
 -- TODO: handle strange mapgen heightmap inconsistencies at borders
 -- TODO: handle the last/first road node in each mapchunk
@@ -196,7 +195,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 				i = i+1
 				-- let the bridge span as many nodes as possible
 				if(used_height[i] >= used_height[z-1] and (i-z <= max_bridge_length)) then
-					walkable_road.build_bridge(start_x, path_wide, used_height[i], z, i,
+					walkable_road.build_bridge(start_x, path_wide, used_height[i], z-1, i+1,
 						heightmap, minp, chunksize, material,
 						-- looks better if there is a bit of room between water level
 						-- and bridge floor
@@ -204,7 +203,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 
 					-- raise the path up to bridge level
 					-- (the bridge has at least a height of min_path_height + 2)
-					for k=z, i do
+					for k=z-1, i do
 						used_height[k] = math.max(min_path_height + 2, used_height[i])
 						is_bridge[k] = true
 					end
@@ -356,6 +355,8 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	if( minp.y < -64 or minp.y > 500) then
 		return
 	end
+
+--	if(not(maxp.y >0 and minp.y<0)) then return end -- TODO
 
 	local heightmap = minetest.get_mapgen_object('heightmap')
 	-- the heightmap is necessary for the calculations; give up if none exists
