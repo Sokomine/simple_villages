@@ -7,6 +7,11 @@ walkable_road = {}
 -- TODO: allow for roads in x direction instead of z direction as well
 -- paths are not built below min_path_height; bridges (2 nodes above that
 --        level) are used in such a case
+-- bridge pillars and tunnel lamps are limited to the current mapchunk
+--        in height (a pillar in midair does not look more strange than
+--        a pillar stretching too far up); if necessary, additional
+--        parallel lines are added below the bridge_side_a and bridge_side_b
+--        lines
 -- the material for all nodes (normal path, slabs, stairs, bridge, tunnel)
 --        is contained in the table "material"
 -- trees: the entire trunk standing on the path is removed, but
@@ -22,6 +27,10 @@ walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z
 	-- no bridges in or below water level
 	if(height < min_height) then
 		height = min_height
+	end
+	-- do not build a bridge if its floor does not fit into the current mapchunk
+	if(height < minp.y or height > minp.y + chunksize) then
+		return
 	end
 	for j=start_z, end_z do
 		-- note: the bridge floor is set when the path as such is placed
@@ -43,21 +52,33 @@ walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z
 		-- TODO: use cobble when in water?
 		if(material.bridge_pillar
 		   and (j-start_z)%(2*(path_wide+2)) == (path_wide+2)) then
-			local h_base = heightmap[ ((j-minp.z)*chunksize) + (start_x-1-minp.x) ]
-			for l=h_base, height-1 do
+			local h_base_a = heightmap[ ((j-minp.z)*chunksize) + (start_x-1-minp.x) ]
+			for l=math.max(minp.y, h_base_a), height-1 do
 
 				minetest.set_node({x=start_x-1,y=l,z=j}, material.bridge_pillar)
 				-- horizontal connections between the pillars
-				if(material.bridge_pillar_cross and  l>0 and l%3==0) then
+				if(material.bridge_pillar_cross and  l>0 and l%3==0 and l>minp.y) then
 					for m=start_x, start_x+path_wide do
 						minetest.set_node({x=m,y=l,z=j}, material.bridge_pillar_cross)
 					end
 				end
 			end
+			-- if we are at the mapchunk border, add additional horizontal connections in
+			-- order to make the bridge look less cut off
+			if(h_base_a < minp.y) then
+				for o = -4 * path_wide, 4 * path_wide do
+					minetest.set_node({x=start_x-1,y=minp.y,z=j+o}, material.bridge_side_a)
+				end
+			end
 			-- second pillar
-			h_base = heightmap[ ((j-minp.z)*chunksize) + (start_x+path_wide-minp.x) ]
-			for l=h_base, height-1 do
+			local h_base_b = heightmap[ ((j-minp.z)*chunksize) + (start_x+path_wide-minp.x) ]
+			for l=math.max(minp.y, h_base_b), height-1 do
 				minetest.set_node({x=start_x+path_wide,y=l,z=j}, material.bridge_pillar)
+			end
+			if(h_base_b < minp.y) then
+				for o = -4 * path_wide, 4 * path_wide do
+					minetest.set_node({x=start_x+path_wide,y=minp.y,z=j+o}, material.bridge_side_a)
+				end
 			end
 		end
 	end
@@ -67,6 +88,10 @@ end
 -- a tunnel is (for now) a bit more simple;
 -- the tunnel itself will be carved out with air later on in the process when the road is made walkable
 walkable_road.build_tunnel = function(start_x, path_wide, height, start_z, end_z, heightmap, minp, chunksize, material )
+	-- only place the lamps if we are still (roughly) inside the current mapchunk
+	if(height+4 < minp.y or height+4 > minp.y + chunksize) then
+		return
+	end
 	for j=start_z, end_z do
 		-- add some lamps so that the tunnel is not too dark
 		-- (but only if we are still below the surface)
