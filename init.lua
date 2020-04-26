@@ -129,7 +129,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 	-- we want to take heights before and after the current position into account;
 	-- therefore, we need to deal with an offset
 	local offset=math.floor((interval_size/2)+0.5)
-	i = 1
+	local i = 1
 	-- now walk along the length of the path
 	for z=start_z, start_z + chunksize do
 		local new_height = math.floor((avg_height_sum / (path_wide * interval_size))+0.5)
@@ -209,7 +209,7 @@ walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize,
 					end
 					-- make sure the bridge can be reached (the entrance may be
 					-- quite steep right now)
-					k = z
+					local k = z
 					local last_direction = 0
 					local direction = 0
 					while(k>minp.z and used_height[k-1]) do
@@ -364,7 +364,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 		return
 	end
 	local chunksize = maxp.x - minp.x + 1
-	dx=minp.x+3
+	local dx=minp.x+3
 	while(dx < minp.x + chunksize - 4) do
 		walkable_road.draw_line( dx, minp.z, heightmap, minp, chunksize, {
 			-- the materials used
