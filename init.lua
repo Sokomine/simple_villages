@@ -78,7 +78,7 @@ end
 
 
 -- build a path extending in z direction
-walkable_road.draw_line = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length, min_path_height)
+walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length, min_path_height)
 	local get_hsum = function(start_x, z, heightmap, minp, chunksize, path_wide)
 		local hsum = 0
 		for x=start_x, start_x+path_wide-1 do
@@ -366,7 +366,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	local chunksize = maxp.x - minp.x + 1
 	local dx=minp.x+3
 	while(dx < minp.x + chunksize - 4) do
-		walkable_road.draw_line( dx, minp.z, heightmap, minp, chunksize, {
+		walkable_road.build_road( dx, minp.z, heightmap, minp, chunksize, {
 			-- the materials used
 			normal         = {name="default:meselamp"},
 			slab_up        = {name="stairs:slab_wood", param2=0},
