@@ -4,6 +4,7 @@ walkable_road = {}
 -- TODO: recognize too high cliffs
 -- TODO: handle strange mapgen heightmap inconsistencies at borders
 -- TODO: handle the last/first road node in each mapchunk
+-- TODO: allow for roads in x direction instead of z direction as well
 -- paths are not built below min_path_height; bridges (2 nodes above that
 --        level) are used in such a case
 -- the material for all nodes (normal path, slabs, stairs, bridge, tunnel)
@@ -179,11 +180,18 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 	--   diffrent materials there later on)
 	local is_bridge = {}
 	local is_tunnel = {}
+	-- there may not be a ground inside the height boundaries of this mapchunk here
+	local is_out_of_bounds = {}
 	local z = start_z+1
 	while( z <= start_z + chunksize ) do
 		local d = used_height[z] - used_height[z-1]
+		-- ground is outside of the mapchunk we are currently working on
+		if(not(used_height[z-1]) or used_height[z-1] < minp.y or used_height[z-1] > minp.y+chunksize+1) then
+			is_out_of_bounds[z-1] = true
+			-- no way to tell the gradient
+			d = 0
 		-- we may need a bridge here
-		if(used_height[z-1] < min_path_height) then
+		elseif(used_height[z-1] < min_path_height) then
 			used_height[z] = min_path_height
 			-- force a bridge
 			d = -2
@@ -257,7 +265,7 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 	-- make sure there is no place on the road that has a gradient higher than one
 	-- because stairs cannot cover more than that
 	for z=start_z, start_z + chunksize do
-		if(used_height[z] and used_height[z-1]) then
+		if(used_height[z] and used_height[z-1] and not(is_out_of_bounds[z-1]) and not(is_out_of_bounds[z])) then
 			local d = used_height[z] - used_height[z-1]
 			if(d > 1) then
 				used_height[z] = used_height[z-1] + 1
@@ -275,6 +283,10 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 	-- actually place the road nodes
 	for z=start_z, start_z + chunksize do
 
+		-- do not place anything if ground is not part of this mapchunk
+		if(is_out_of_bounds[z]) then
+			break
+		end
 		-- if there is a tree trunk at ground level, clean up the entire tree
 		-- (check the entire width of the path)
 		for x=start_x, start_x+path_wide-1 do
@@ -301,6 +313,7 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 		else
 			set_road_nodes(start_x, path_wide, used_height[z], z, material.normal)
 		end
+
 		-- clear the area above the path so that there is room for walking
 		for h=used_height[z]+1, used_height[z]+3 do
 			set_road_nodes(start_x, path_wide, h, z, {name="air"})
@@ -321,8 +334,11 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 	for z=start_z, start_z + chunksize do
 		-- there needs to be more room for the player in order to be able to use stairs etc
 		local clear_headroom = nil
+		-- do not place anything if ground is not part of this mapchunk
+		if(is_out_of_bounds[z]) then
+			-- do nothing
 		-- candidate for a slab
-		if(used_height[z] == used_height[z+1] and used_height[z-1] == used_height[z-2]) then
+		elseif(used_height[z] == used_height[z+1] and used_height[z-1] == used_height[z-2]) then
 			if(     used_height[z-1] and used_height[z] == used_height[z-1] + 1) then
 				set_road_nodes(start_x, path_wide, used_height[z], z-1, material.slab_up)
 				clear_headroom = z-1
@@ -351,12 +367,11 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 end
 
 
+
 minetest.register_on_generated(function(minp, maxp, seed)
 	if( minp.y < -64 or minp.y > 500) then
 		return
 	end
-
---	if(not(maxp.y >0 and minp.y<0)) then return end -- TODO
 
 	local heightmap = minetest.get_mapgen_object('heightmap')
 	-- the heightmap is necessary for the calculations; give up if none exists
