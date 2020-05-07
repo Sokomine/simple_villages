@@ -53,6 +53,9 @@ walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z
 		if(material.bridge_pillar
 		   and (j-start_z)%(2*(path_wide+2)) == (path_wide+2)) then
 			local h_base_a = heightmap[ ((j-minp.z)*chunksize) + (start_x-1-minp.x) ]
+			if(not(h_base_a)) then
+				h_base_a = minp.y-1
+			end
 			for l=math.max(minp.y, h_base_a), height-1 do
 
 				minetest.set_node({x=start_x-1,y=l,z=j}, material.bridge_pillar)
@@ -72,6 +75,9 @@ walkable_road.build_bridge = function(start_x, path_wide, height, start_z, end_z
 			end
 			-- second pillar
 			local h_base_b = heightmap[ ((j-minp.z)*chunksize) + (start_x+path_wide-minp.x) ]
+			if(not(h_base_b)) then
+				h_base_b = minp.y-1
+			end
 			for l=math.max(minp.y, h_base_b), height-1 do
 				minetest.set_node({x=start_x+path_wide,y=l,z=j}, material.bridge_pillar)
 			end
@@ -104,7 +110,7 @@ end
 
 
 -- build a path extending in z direction
-walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length, min_path_height)
+walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize, material, path_wide, interval_size, max_bridge_length, max_tunnel_length, min_path_height, bridge_height)
 	local get_hsum = function(start_x, z, heightmap, minp, chunksize, path_wide)
 		local hsum = 0
 		for x=start_x, start_x+path_wide-1 do
@@ -254,18 +260,32 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 			local i = z
 			while( i<start_z + chunksize) do
 				i = i+1
+				local bridge_ends = true
+				if(not(used_height[i])
+				    or used_height[i] < min_path_height
+				    or used_height[i] < used_height[z-1]) then
+					bridge_ends = false
+				elseif(used_height[i] == min_path_height) then
+					local n = minetest.get_node({x=start_x,y=used_height[i],z=i})
+					if(not(n) or not(n.name) or n.name=="default:water_source" or n.name=="air") then
+						bridge_ends = false
+					end
+				end
+				if(i-z > max_bridge_length) then
+					bridge_ends = true
+				end
 				-- let the bridge span as many nodes as possible
-				if(used_height[i] >= used_height[z-1] and (i-z <= max_bridge_length)) then
+				if(bridge_ends or i == start_z + chunksize) then
 					walkable_road.build_bridge(start_x, path_wide, used_height[i], z-1, i+1,
 						heightmap, minp, chunksize, material,
 						-- looks better if there is a bit of room between water level
 						-- and bridge floor
-						min_path_height + 2 )
+						min_path_height + bridge_height + 1)
 
 					-- raise the path up to bridge level
 					-- (the bridge has at least a height of min_path_height + 2)
 					for k=z-1, i do
-						used_height[k] = math.max(min_path_height + 2, used_height[i])
+						used_height[k] = math.max(min_path_height + bridge_height + 1, used_height[i])
 						is_bridge[k] = true
 					end
 					-- make sure the bridge can be reached (the entrance may be
@@ -437,10 +457,10 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	while(dx < minp.x + chunksize - 4) do
 		walkable_road.build_road( dx, minp.z, heightmap, minp, chunksize, {
 			-- the materials used
-			normal         = {name="default:meselamp"},
-			slab_up        = {name="stairs:slab_wood", param2=0},
-			slab_down      = {name="stairs:slab_wood", param2=0},
-			stair_up       = {name="stairs:stair_cobble", param2=0},
+			normal         = {name="default:stonebrick"},
+			slab_up        = {name="stairs:slab_stonebrick", param2=0},
+			slab_down      = {name="stairs:slab_stonebrick", param2=0},
+			stair_up       = {name="stairs:stair_stonebrick", param2=0},
 			stair_down     = {name="stairs:stair_stonebrick", param2=2},
 			bridge_floor   = {name="default:wood"},
 			bridge_side_a  = {name="default:tree", param2=4},
@@ -449,12 +469,19 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			bridge_fence_b = {name="default:fence_wood"},
 			bridge_pillar  = {name="default:tree"},
 			bridge_pillar_cross = {name="default:tree", param2=12},
-			tunnel_floor   = {name="default:cobble"},
+			tunnel_floor   = {name="default:stonebrick"},
 			tunnel_lamp    = {name="default:meselamp"},
 			path_air       = {name="air"}, --flatpath:path_air"},
-			}, 2, 5, 135, 25,
-			-- min path height (ought to be at water level)
-			1)
+			}, 2, 5,
+			-- max_bridge_length
+			135,
+			-- max_tunnel_length
+			25,
+			-- min_path_height (ought to be at water level)
+			1,
+			-- min_bridge_height (2 nodes between bridge and water - enough room for
+			-- players in a boat)
+			2)
 		dx = dx + 8
 	end
 --	walkable_road.draw_line( minp.x+math.floor(chunksize/2), minp.z, heightmap, minp, chunksize, "default:meselamp", 2, 5)
