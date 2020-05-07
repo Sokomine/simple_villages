@@ -126,7 +126,6 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 		end
 	end
 
-
 	-- store the observed height averages (or rather, the sum of
 	-- all observed heights accross the entire width of the path
 	-- at a certain point of its length)
@@ -148,6 +147,35 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 		averages[i] = hsum
 	end
 	local avg_height_sum = hsum * interval_size
+
+--[[
+	-- has the neighbouring mapchunk already been generated? if so, determine its
+	-- road level
+	local pos = minetest.find_nodes_in_area(
+			{x=start_x, y=minp.y, z=start_z-math.min(16, interval_size-1)},
+			{x=start_x, y=minp.y+chunksize, z=start_z},
+			material.path_air)
+	for i,p in ipairs(pos) do
+		local i2 = start_z-p.z+1
+		avg_height_sum = avg_height_sum - averages[i2]
+		averages[i2] = (p.y - 2) * path_wide
+		avg_height_sum = avg_height_sum + averages[i2]
+		minetest.set_node(p, {name="wool:pink"})
+	end
+	pos = minetest.find_nodes_in_area(
+			{x=start_x, y=minp.y, z=start_z+chunksize+1+math.min(16, interval_size-1)},
+			{x=start_x, y=minp.y+chunksize, z=start_z+chunksize+1},
+			material.path_air)
+	for i,p in ipairs(pos) do
+		local i2 = start_z-p.z+1
+--		avg_height_sum = avg_height_sum - averages[i2]
+--		averages[i2] = (p.y - 2) * path_wide
+--		avg_height_sum = avg_height_sum + averages[i2]
+		minetest.set_node(p, {name="wool:red"})
+	end
+	--minetest.set_node({x=start_x,y=minp.y+chunksize-1,z=start_z}, {name="wool:blue"})
+--]]
+
 
 	-- store at which height we placed the road with this algorithm
 	local used_height = {}
@@ -309,7 +337,7 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 	for z=start_z, start_z + chunksize do
 
 		-- do not place anything if ground is not part of this mapchunk
-		if(is_out_of_bounds[z]) then
+		if(is_out_of_bounds[z] and not(is_bridge[z] or is_tunnel[z])) then
 			break
 		end
 		-- if there is a tree trunk at ground level, clean up the entire tree
@@ -343,6 +371,7 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 		for h=used_height[z]+1, used_height[z]+3 do
 			set_road_nodes(start_x, path_wide, h, z, {name="air"})
 		end
+		set_road_nodes(start_x, path_wide, used_height[z]+2, z, material.path_air)
 
 --		for x=start_x, start_x+path_wide-1 do
 --			local old_height = heightmap[ ((z-minp.z)*chunksize) + (x-minp.x) ]
@@ -392,7 +421,6 @@ walkable_road.build_road = function(start_x, start_z, heightmap, minp, chunksize
 end
 
 
-
 minetest.register_on_generated(function(minp, maxp, seed)
 	if( minp.y < -64 or minp.y > 500) then
 		return
@@ -403,6 +431,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	if(not(heightmap)) then
 		return
 	end
+
 	local chunksize = maxp.x - minp.x + 1
 	local dx=minp.x+3
 	while(dx < minp.x + chunksize - 4) do
@@ -422,6 +451,7 @@ minetest.register_on_generated(function(minp, maxp, seed)
 			bridge_pillar_cross = {name="default:tree", param2=12},
 			tunnel_floor   = {name="default:cobble"},
 			tunnel_lamp    = {name="default:meselamp"},
+			path_air       = {name="air"}, --flatpath:path_air"},
 			}, 2, 5, 135, 25,
 			-- min path height (ought to be at water level)
 			1)
@@ -429,3 +459,18 @@ minetest.register_on_generated(function(minp, maxp, seed)
 	end
 --	walkable_road.draw_line( minp.x+math.floor(chunksize/2), minp.z, heightmap, minp, chunksize, "default:meselamp", 2, 5)
 end)
+
+--[[
+minetest.register_node("flatpath:path_air", {
+        description = "Path air",
+        drawtype = "airlike",
+        paramtype = "light",
+        sunlight_propagates = true,
+        walkable = false,
+        pointable = false,
+        diggable = false,
+        buildable_to = true,
+        drop = "",
+})
+--]]
+
